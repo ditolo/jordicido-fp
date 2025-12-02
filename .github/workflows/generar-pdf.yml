@@ -1,0 +1,43 @@
+name: Generar PDF único
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Instalar Pandoc
+      uses: pandoc/actions/setup@v1
+      with:
+        version: 3.1
+
+    - name: Combinar todos los Markdown
+      run: |
+        echo "Generando archivo combinado..."
+        echo "" > combined.md
+        find docs -name "*.md" | sort | while read f; do
+          echo "# Archivo: $f" >> combined.md
+          cat "$f" >> combined.md
+          echo -e "\n\n" >> combined.md
+        done
+
+    - name: Generar PDF único
+      run: |
+        pandoc combined.md -o documento_unico.pdf \
+          --toc \
+          --number-sections \
+          -V geometry:a4paper \
+          -V fontsize=12pt
+
+    - name: Subir PDF como artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: documento_unico
+        path: documento_unico.pdf
