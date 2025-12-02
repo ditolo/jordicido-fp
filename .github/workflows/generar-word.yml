@@ -1,0 +1,83 @@
+name: Generar Word único (orden personalizado)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Instalar Pandoc
+      uses: pandoc/actions/setup@v1
+      with:
+        version: 3.1
+
+    - name: Generar combined.md en el orden personalizado
+      run: |
+        OUTPUT="combined.md"
+        echo "" > $OUTPUT
+
+        echo "=== Añadiendo docs/index.md ==="
+        if [ -f docs/index.md ]; then
+          echo "# docs/index.md" >> $OUTPUT
+          cat docs/index.md >> $OUTPUT
+          echo -e "\n\n" >> $OUTPUT
+        fi
+
+        process_section () {
+          SECTION=$1
+          echo "Procesando sección: $SECTION"
+
+          # 1. index.md de la sección
+          if [ -f "docs/$SECTION/index.md" ]; then
+            echo "# docs/$SECTION/index.md" >> $OUTPUT
+            cat "docs/$SECTION/index.md" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          fi
+
+          # 2. pd.md de la sección
+          if [ -f "docs/$SECTION/pd.md" ]; then
+            echo "# docs/$SECTION/pd.md" >> $OUTPUT
+            cat "docs/$SECTION/pd.md" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          fi
+
+          # 3. index.md de cada subcarpeta dentro de la sección
+          find "docs/$SECTION" -mindepth 2 -maxdepth 2 -type f -name "index.md" | sort | while read subfile; do
+            echo "# $subfile" >> $OUTPUT
+            cat "$subfile" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          done
+        }
+
+        process_section "EDD"
+        process_section "MPO"
+        process_section "SSII"
+
+        echo "combined.md generado correctamente"
+
+    - name: Generar Word estilizado
+      run: |
+        # Verifica que exista la plantilla
+        if [ ! -f plantilla.docx ]; then
+          echo "ERROR: No se encontró plantilla.docx en la raíz del repositorio"
+          exit 1
+        fi
+
+        # Genera el Word con tabla de contenidos y numeración
+        pandoc combined.md -o documento_unico.docx \
+          --reference-doc=plantilla.docx \
+          --toc \
+          --number-sections
+
+    - name: Subir Word como artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: documento_unico
+        path: documento_unico.docx
