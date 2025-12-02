@@ -1,4 +1,4 @@
-name: Generar PDF único
+name: Generar PDF único (orden del repositorio)
 
 on:
   push:
@@ -18,22 +18,34 @@ jobs:
       with:
         version: 3.1
 
-    - name: Combinar todos los Markdown
+    - name: Instalar wkhtmltopdf
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wkhtmltopdf
+
+    - name: Combinar Markdown respetando el árbol del repo
       run: |
         echo "Generando archivo combinado..."
         echo "" > combined.md
-        find docs -name "*.md" | sort | while read f; do
-          echo "# Archivo: $f" >> combined.md
+
+        while IFS= read -r f; do
+          echo "## $(basename "$f")" >> combined.md
           cat "$f" >> combined.md
           echo -e "\n\n" >> combined.md
-        done
+        done < <(find docs -type f -name "*.md" | sort)
 
-    - name: Generar PDF único
+    - name: Generar PDF único sin LaTeX
       run: |
         pandoc combined.md -o documento_unico.pdf \
+          --from markdown \
+          --to html5 \
+          --pdf-engine=wkhtmltopdf \
           --toc \
           --number-sections \
-          -V geometry:a4paper \
+          -V margin-top=20mm \
+          -V margin-bottom=20mm \
+          -V margin-left=15mm \
+          -V margin-right=15mm \
           -V fontsize=12pt
 
     - name: Subir PDF como artifact
