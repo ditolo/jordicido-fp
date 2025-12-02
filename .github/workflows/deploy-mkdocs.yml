@@ -1,35 +1,88 @@
-name: Deploy MkDocs Material to GitHub Pages
+name: Generar PDF único (orden personalizado)
 
 on:
   push:
     branches: [ main ]
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout del repositorio
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+    - name: Instalar Pandoc
+      uses: pandoc/actions/setup@v1
+      with:
+        version: 3.1
 
-      - name: Instalar dependencias
-        run: pip install -r requirements.txt
+    - name: Instalar wkhtmltopdf
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wkhtmltopdf
 
-      - name: Construir el sitio MkDocs
-        run: mkdocs build
+    - name: Generar combined.md en el orden personalizado
+      run: |
+        OUTPUT="combined.md"
+        echo "" > $OUTPUT
 
-      - name: Desplegar en GitHub Pages
-        run: mkdocs gh-deploy --force
+        echo "=== Añadiendo docs/index.md ==="
+        if [ -f docs/index.md ]; then
+          echo "# docs/index.md" >> $OUTPUT
+          cat docs/index.md >> $OUTPUT
+          echo -e "\n\n" >> $OUTPUT
+        fi
+
+        process_section () {
+          SECTION=$1
+          echo "Procesando sección: $SECTION"
+
+          # 1. index.md de la sección
+          if [ -f "docs/$SECTION/index.md" ]; then
+            echo "# docs/$SECTION/index.md" >> $OUTPUT
+            cat "docs/$SECTION/index.md" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          fi
+
+          # 2. pd.md de la sección
+          if [ -f "docs/$SECTION/pd.md" ]; then
+            echo "# docs/$SECTION/pd.md" >> $OUTPUT
+            cat "docs/$SECTION/pd.md" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          fi
+
+          # 3. index.md de cada subcarpeta dentro de la sección
+          find "docs/$SECTION" -mindepth 2 -maxdepth 2 -type f -name "index.md" | sort | while read subfile; do
+            echo "# $subfile" >> $OUTPUT
+            cat "$subfile" >> $OUTPUT
+            echo -e "\n\n" >> $OUTPUT
+          done
+        }
+
+        process_section "EDD"
+        process_section "MPO"
+        process_section "SSII"
+
+        echo "combined.md generado correctamente"
+
+    - name: Generar PDF único sin LaTeX
+      run: |
+        pandoc combined.md -o documento_unico.pdf \
+          --from markdown \
+          --to html5 \
+          --pdf-engine=wkhtmltopdf \
+          --toc \
+          --number-sections \
+          -V margin-top=20mm \
+          -V margin-bottom=20mm \
+          -V margin-left=15mm \
+          -V margin-right=15mm \
+          -V fontsize=12pt
+
+    - name: Subir PDF como artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: documento_unico
+        path: documento_unico.pdf
